@@ -4,12 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"testing"
 )
 
-const Testdata = "testdata"
+const (
+	ExpectedSparse = "sparse-file"
+	Testdata       = "testdata"
+)
 
+// TestMain creates and removes the testdata files
 func TestMain(m *testing.M) {
 	flag.Parse()
 	removeFiles()
@@ -18,8 +22,10 @@ func TestMain(m *testing.M) {
 	removeFiles()
 }
 
+// TestSparses searchs for sparse files.
+// Will Only work on FS with sparse file support like in Linux (Not in OSX)
 func TestSparses(t *testing.T) {
-	expected := Testdata + "/sparse-file"
+	expected := filepath.Join(Testdata, ExpectedSparse)
 	actual, err := FindSparses(Testdata)
 	if err != nil {
 		t.Fatalf("Error in Sparses call!: %s\n", err)
@@ -36,44 +42,27 @@ func createFiles() {
 	// directory
 	err := os.MkdirAll(Testdata, 0750)
 	dieOnError(err)
-	// sparse-file
-	sf, err := os.Create(Testdata + "/sparse-file")
+	// files
+	createTestFile(ExpectedSparse, zero, 1, 24576)
+	createTestFile("zeroes-file", zero, 4098, 0)
+	createTestFile("ones-file", one, 1090, 0)
+}
+
+// createTestFile creates a file named filename & writes buf n times from pos
+func createTestFile(filename string, buf []byte, n int, pos int64) {
+	f, err := os.Create(filepath.Join(Testdata, filename))
 	dieOnError(err)
-	defer sf.Close()
-	_, err = sf.Seek(24576, 0)
+	defer f.Close()
+	_, err = f.Seek(pos, 0)
 	dieOnError(err)
-	_, err = sf.Write(zero)
+	_, err = f.Write(buf)
 	dieOnError(err)
-	// zeroes-file
-	zf, err := os.Create(Testdata + "/zeroes-file")
-	dieOnError(err)
-	defer zf.Close()
-	for i := 0; i <= 4098; i++ {
-		_, err := zf.Write(zero)
-		dieOnError(err)
-	}
-	// ones-file
-	of, err := os.Create(Testdata + "/ones-file")
-	dieOnError(err)
-	defer of.Close()
-	for i := 0; i <= 1090; i++ {
-		_, err := of.Write(one)
-		dieOnError(err)
-	}
-	// ls to check sizes on command line
-	run("ls", "-ls", Testdata)
 }
 
 // creates testdata/sparse-file & testdata/zeroes-file
 func removeFiles() {
 	err := os.RemoveAll(Testdata)
 	dieOnError(err)
-}
-
-func run(cmd string, args ...string) {
-	out, err := exec.Command(cmd, args...).CombinedOutput()
-	dieOnError(err)
-	fmt.Println(string(out))
 }
 
 // dieOnError reports error and exists if error e is not nil
